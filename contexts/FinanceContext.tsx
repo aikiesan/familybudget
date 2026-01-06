@@ -27,6 +27,7 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [data, setData] = useState<FinanceData | null>(null);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Load data on mount (async)
   useEffect(() => {
@@ -42,18 +43,15 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       } else {
         console.log('ℹ️ Supabase not configured - using localStorage only');
       }
+      
+      setIsLoading(false);
     };
     loadData();
   }, []);
 
-  // Show loading state
-  if (!data) {
-    return null; // or a loading spinner
-  }
-
   // Save to localStorage and Supabase whenever data changes
   useEffect(() => {
-    if (!data) return;
+    if (!data || isLoading) return;
     
     // Update monthly snapshot
     const currentMonth = format(new Date(), 'yyyy-MM');
@@ -181,6 +179,18 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const financeData = await loadFinanceData();
     setData(financeData);
   };
+
+  // Show loading state while data is being fetched
+  if (isLoading || !data) {
+    return (
+      <div className="min-h-screen bg-[#FAFBFC] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-sm text-gray-600">Loading your finances...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <FinanceContext.Provider
