@@ -11,6 +11,7 @@ import { Insights } from '@/components/Insights';
 import { PeriodNavigation } from '@/components/PeriodNavigation';
 import { DataManagement } from '@/components/DataManagement';
 import { FloatingActionButton } from '@/components/FloatingActionButton';
+import { SupabaseStatus } from '@/components/SupabaseStatus';
 import { Wallet, Menu, X } from 'lucide-react';
 
 export default function Home() {
@@ -35,12 +36,15 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="lg:hidden p-2 hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              {showMobileMenu ? <X className="w-6 h-6 text-gray-600" /> : <Menu className="w-6 h-6 text-gray-600" />}
-            </button>
+            <div className="flex items-center gap-3">
+              <SupabaseStatus />
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="lg:hidden p-2 hover:bg-gray-50 rounded-lg transition-colors"
+              >
+                {showMobileMenu ? <X className="w-6 h-6 text-gray-600" /> : <Menu className="w-6 h-6 text-gray-600" />}
+              </button>
+            </div>
           </div>
         </div>
       </header>

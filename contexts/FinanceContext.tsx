@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { FinanceData, Expense, RecurringExpense, TripSavingsEntry } from '@/types/finance';
-import { loadFinanceData, saveFinanceData } from '@/lib/storage';
+import { loadFinanceData, saveFinanceData } from '@/lib/supabaseStorage'; // Changed to hybrid storage
+import { testSupabaseConnection } from '@/lib/supabaseStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
 
@@ -18,16 +19,41 @@ interface FinanceContextType {
   addTripSavings: (amount: number) => void;
   updateTripSavings: (target: number, deadline: string) => void;
   refreshData: () => void;
+  isSupabaseConnected: boolean;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [data, setData] = useState<FinanceData>(() => loadFinanceData());
+  const [data, setData] = useState<FinanceData | null>(null);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
 
-  // Save to localStorage whenever data changes
+  // Load data on mount (async)
   useEffect(() => {
-    saveFinanceData(data);
+    const loadData = async () => {
+      const financeData = await loadFinanceData();
+      setData(financeData);
+
+      // Check Supabase connection
+      const connected = await testSupabaseConnection();
+      setIsSupabaseConnected(connected);
+      if (connected) {
+        console.log('✅ Supabase connected - auto-sync enabled');
+      } else {
+        console.log('ℹ️ Supabase not configured - using localStorage only');
+      }
+    };
+    loadData();
+  }, []);
+
+  // Show loading state
+  if (!data) {
+    return null; // or a loading spinner
+  }
+
+  // Save to localStorage and Supabase whenever data changes
+  useEffect(() => {
+    if (!data) return;
     
     // Update monthly snapshot
     const currentMonth = format(new Date(), 'yyyy-MM');
@@ -43,104 +69,117 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const totalExpenses = monthlyRecurringTotal + monthlyOneTimeTotal;
     const balance = data.salary - totalExpenses;
     
-    setData(prev => ({
-      ...prev,
+    const updatedData: FinanceData = {
+      ...data,
       monthlySnapshots: {
-        ...prev.monthlySnapshots,
+        ...data.monthlySnapshots,
         [currentMonth]: {
           income: data.salary,
           expenses: totalExpenses,
           balance,
         },
       },
-    }));
-  }, [data.salary, data.expenses, data.recurringExpenses]);
+    };
+    
+    setData(updatedData);
+    saveFinanceData(updatedData); // This now syncs to both localStorage and Supabase
+  }, [data?.salary, data?.expenses, data?.recurringExpenses]);
 
   const updateSalary = (salary: number, date: string) => {
-    setData(prev => ({ ...prev, salary, salaryDate: date }));
+    if (!data) return;
+    setData({ ...data, salary, salaryDate: date });
   };
 
   const addExpense = (expense: Omit<Expense, 'id' | 'recurring'>) => {
+    if (!data) return;
     const newExpense: Expense = {
       ...expense,
       id: uuidv4(),
       recurring: false,
     };
-    setData(prev => ({ ...prev, expenses: [...prev.expenses, newExpense] }));
+    setData({ ...data, expenses: [...data.expenses, newExpense] });
   };
 
   const updateExpense = (id: string, updates: Partial<Expense>) => {
-    setData(prev => ({
-      ...prev,
-      expenses: prev.expenses.map(exp => 
+    if (!data) return;
+    setData({
+      ...data,
+      expenses: data.expenses.map(exp => 
         exp.id === id ? { ...exp, ...updates } : exp
       ),
-    }));
+    });
   };
 
   const deleteExpense = (id: string) => {
-    setData(prev => ({
-      ...prev,
-      expenses: prev.expenses.filter(exp => exp.id !== id),
-    }));
+    if (!data) return;
+    setData({
+      ...data,
+      expenses: data.expenses.filter(exp => exp.id !== id),
+    });
   };
 
   const addRecurringExpense = (expense: Omit<RecurringExpense, 'id' | 'recurring'>) => {
+    if (!data) return;
     const newExpense: RecurringExpense = {
       ...expense,
       id: uuidv4(),
       recurring: true,
     };
-    setData(prev => ({
-      ...prev,
-      recurringExpenses: [...prev.recurringExpenses, newExpense],
-    }));
+    setData({
+      ...data,
+      recurringExpenses: [...data.recurringExpenses, newExpense],
+    });
   };
 
   const updateRecurringExpense = (id: string, updates: Partial<RecurringExpense>) => {
-    setData(prev => ({
-      ...prev,
-      recurringExpenses: prev.recurringExpenses.map(exp =>
+    if (!data) return;
+    setData({
+      ...data,
+      recurringExpenses: data.recurringExpenses.map(exp =>
         exp.id === id ? { ...exp, ...updates } : exp
       ),
-    }));
+    });
   };
 
   const deleteRecurringExpense = (id: string) => {
-    setData(prev => ({
-      ...prev,
-      recurringExpenses: prev.recurringExpenses.filter(exp => exp.id !== id),
-    }));
+    if (!data) return;
+    setData({
+      ...data,
+      recurringExpenses: data.recurringExpenses.filter(exp => exp.id !== id),
+    });
   };
 
   const addTripSavings = (amount: number) => {
+    if (!data) return;
     const entry: TripSavingsEntry = {
       date: new Date().toISOString().split('T')[0],
       amount,
     };
-    setData(prev => ({
-      ...prev,
+    setData({
+      ...data,
       tripSavings: {
-        ...prev.tripSavings,
-        saved: prev.tripSavings.saved + amount,
-        entries: [...prev.tripSavings.entries, entry],
+        ...data.tripSavings,
+        saved: data.tripSavings.saved + amount,
+        entries: [...data.tripSavings.entries, entry],
       },
-    }));
+    });
   };
 
   const updateTripSavings = (target: number, deadline: string) => {
-    setData(prev => ({
-      ...prev,
+    if (!data) return;
+    setData({
+      ...data,
       tripSavings: {
-        ...prev.tripSavings,
+        ...data.tripSavings,
         target,
         deadline,
       },
-    }));
+    });
   };
 
-  const refreshData = () => {
-    setData(loadFinanceData());
+  const refreshData = async () => {
+    const financeData = await loadFinanceData();
+    setData(financeData);
   };
 
   return (
@@ -157,6 +196,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         addTripSavings,
         updateTripSavings,
         refreshData,
+        isSupabaseConnected,
       }}
     >
       {children}
