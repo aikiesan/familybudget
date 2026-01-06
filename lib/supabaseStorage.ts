@@ -50,25 +50,33 @@ export const syncToSupabase = async (data: FinanceData): Promise<void> => {
     }
 
     // Sync trip savings
-    await supabase
+    const { error: tripError } = await supabase
       .from('trip_savings')
       .upsert({
-        id: 'default', // Using a fixed ID for single user
+        id: 'default',
         target: data.tripSavings.target,
         deadline: data.tripSavings.deadline,
         saved: data.tripSavings.saved,
         entries: data.tripSavings.entries,
-      }, { onConflict: 'id' });
+      });
+    
+    if (tripError) {
+      console.warn('Trip savings sync warning:', tripError.message);
+    }
 
     // Sync finance data
-    await supabase
+    const { error: financeError } = await supabase
       .from('finance_data')
       .upsert({
-        id: 'default', // Using a fixed ID for single user
+        id: 'default',
         salary: data.salary,
         salary_date: data.salaryDate,
         monthly_snapshots: data.monthlySnapshots,
-      }, { onConflict: 'id' });
+      });
+    
+    if (financeError) {
+      console.warn('Finance data sync warning:', financeError.message);
+    }
 
     console.log('✅ Synced to Supabase successfully');
   } catch (error) {
